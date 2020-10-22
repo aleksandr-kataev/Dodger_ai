@@ -1,6 +1,8 @@
+
 import pygame
 import os
 import random
+import neat
 from os import path
 
 
@@ -22,8 +24,8 @@ def centerWindow():
     os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (x, y)
 
 
-img_dir = path.join(path.dirname(__file__), 'img')
-sound_dir = path.join(path.dirname(__file__), 'sound')
+img_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'img'))
+sound_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'sound'))
 
 # Set dimensions
 WIDTH = 900
