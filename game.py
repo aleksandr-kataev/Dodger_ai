@@ -1,39 +1,71 @@
 import pygame
+import os
 import random
+from Player import Player
 
 # CONSTANS
 
 # Game dimensions
-WIDTH = 800
-HEIGHT = 800
+WIDTH = 1436
+HEIGHT = 923
 
 # Colors
 GREEN = (0, 255, 0)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
-FPS = 120
+FPS = 30
 
 
-class Game()
+os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (300, 80)
 
 
-def centerWindow():
-    x = 500
-    y = 100
-    os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (x, y)
+pygame.init()
+window = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("AI")
+
+PLAYER_RUNNING_IMAGES = [
+    pygame.image.load('./img/c1.png'),
+    pygame.image.load('./img/c2.png'),
+    pygame.image.load('./img/c3.png'),
+    pygame.image.load('./img/c4.png'),
+    pygame.image.load('./img/c5.png'),
+    pygame.image.load('./img/c6.png'),
+]
+
+PLAYER_JUMPING_IMAGES = [
+    pygame.image.load('./img/j1.png').convert(),
+    pygame.image.load('./img/j2.png').convert(),
+]
 
 
-def initialise_game():
-    window = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("AI")
-    clock = pygame.time.Clock()
+EXPLOSIONS_IMAGES = [
+    pygame.image.load('./img/e1.png').convert(),
+    pygame.image.load('./img/e2.png').convert(),
+    pygame.image.load('./img/e3.png').convert(),
+    pygame.image.load('./img/e4.png').convert(),
+    pygame.image.load('./img/e5.png').convert(),
+    pygame.image.load('./img/e6.png').convert(),
+    pygame.image.load('./img/e7.png').convert(),
+    pygame.image.load('./img/e8.png').convert(),
+    pygame.image.load('./img/e9.png').convert(),
+]
 
-    global all_sprites
-    all_sprites = pygame.sprite.Group()
+ENEMIES_IMAGES = [
+    pygame.image.load('./img/spike.png').convert(),
+]
 
-    global enemies
-    enemies = pygame.sprite.Group()
+BACKGROUND_IMAGE = pygame.image.load('./img/background.png').convert()
+BACKGROUND_RECT = BACKGROUND_IMAGE.get_rect()
+
+FONT_NAME = pygame.font.match_font('arial')
+
+CLOCK = pygame.time.Clock()
+
+ENEMY_PROPB = 100
+ENEMIES = []
+MIN_TIME_BETWEEN_ENEMIES = 200
+CURRENT_TIME_SINCE_LAST_ENEMY = 0
 
 
 def show_start_screen():
@@ -44,7 +76,7 @@ def show_start_screen():
     pygame.display.flip()
     waiting = True
     while waiting:
-        clock.tick(FPS)
+        CLOCK.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -82,8 +114,103 @@ def draw_lives(surface, x, y, lives, img):
 
 # Draw text, used for the score
 def draw_text(surface, text, size, x, y):
-    font = pygame.font.Font(font_name, size)
+    font = pygame.font.Font(FONT_NAME, size)
     text_surface = font.render(text, True, WHITE)
     text_rect = text_surface.get_rect()
     text_rect.midtop = (x, y)
     surface.blit(text_surface, text_rect)
+
+
+def init_sprites(type):
+    # Ground different sprites together
+    global all_sprites
+    all_sprites = pygame.sprite.Group()
+
+    global enemies
+    enemies = pygame.sprite.Group()
+    all_sprites.add(enemies)
+
+    if (type != 'controlled'):
+        global player
+        player = Player(PLAYER_RUNNING_IMAGES)
+        all_sprites.add(player)
+
+
+def controlled_run():
+    players = []
+
+    # Ground different sprites together
+    global all_sprites
+    all_sprites = pygame.sprite.Group()
+    global enemies
+    enemies = pygame.sprite.Group()
+
+    running = True
+
+    while running:
+        CLOCK.tick(FPS)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        all_sprites.update()
+
+        for x, player in enumerate(players):
+            hits = pygame.sprite.groupcollide(enemies, player, True, True)
+            for hit in hits:
+                # enemy_exp_sound.play()
+                # TODO explosion class
+                expl = Explosion(hit.rect.center)
+                all_sprites.add(expl)
+                game_over = True
+
+        window.fill(BLACK)
+        window.blit(BACKGROUND_IMAGE, BACKGROUND_RECT)
+        all_sprites.draw(window)
+        pygame.display.flip()
+
+    pygame.quit()
+    quit()
+
+
+def run():
+    # show_start_screen()
+
+    init_sprites('run')
+
+    game_over = False
+    running = True
+
+    while running:
+        if game_over:
+            show_game_over_screen()
+            game_over = False
+            initialise_game()
+
+        CLOCK.tick(FPS)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        all_sprites.update()
+
+        hits = pygame.sprite.groupcollide(enemies, player, True, True)
+
+        for hit in hits:
+            # enemy_exp_sound.play()
+            expl = Explosion(hit.rect.center)
+            all_sprites.add(expl)
+            game_over = True
+
+        window.fill(WHITE)
+        window.blit(BACKGROUND_IMAGE, BACKGROUND_RECT)
+        all_sprites.draw(window)
+        pygame.display.flip()
+
+    pygame.quit()
+    quit()
+
+
+run()
