@@ -6,11 +6,11 @@ class Player(pygame.sprite.Sprite):
     RED = (255, 0, 0)
 
     init_x = 100
-    init_y = 680
+    init_y = 678
 
-    jump_height = 250
-    jump_speed = 5
-    jump_speed_accel = 0
+    jump_height = 150
+    jump_speed = 8
+    jump_speed_accel = 2
 
     def __init__(self, images):
         pygame.sprite.Sprite.__init__(self)
@@ -57,7 +57,7 @@ class Player(pygame.sprite.Sprite):
             if self.rect.y <= Player.init_y:
                 self.rect.y += Player.jump_speed
 
-            self.image = self.images[self.run_count//3]
+            self.image = self.images[self.run_count//6]
             self.image.set_colorkey(Player.RED)
             self.run_count += 1
 
