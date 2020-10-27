@@ -4,7 +4,7 @@ import random
 import neat
 import pickle
 from Player import Player
-from Spike import Spike
+from Barrel import Barrel
 from Background import Background
 from Explosion import Explosion
 
@@ -50,7 +50,10 @@ EXPLOSIONS_IMAGES = [
     pygame.image.load('./img/e9.png'),
 ]
 
-SPIKE_IMAGE = pygame.image.load('./img/spike.png')
+BARREL_IMAGES = [
+    pygame.image.load('./img/barrel_1.png'),
+    pygame.image.load('./img/barrel_2.png')
+]
 
 
 BACKGROUND_IMAGE = pygame.image.load('./img/background.png')
@@ -63,9 +66,9 @@ CLOCK = pygame.time.Clock()
 
 BACKGROUND = Background(BACKGROUND_IMAGE)
 
-ENEMY_PROPB = 100
-MIN_TIME_BETWEEN_ENEMIES = 80
-CURRENT_TIME_SINCE_LAST_ENEMY = 0
+BARREL_PROB = 100
+MIN_TIME_BETWEEN_BARRELS = 80
+CURRENT_TIME_SINCE_LAST_BARREL = 0
 
 
 def show_game_over_screen():
@@ -111,9 +114,9 @@ def init_sprites(type):
     global all_sprites
     all_sprites = pygame.sprite.Group()
 
-    global enemies
-    enemies = pygame.sprite.Group()
-    all_sprites.add(enemies)
+    global barrels
+    barrels = pygame.sprite.Group()
+    all_sprites.add(barrels)
 
     if (type != 'ai_train'):
         global player
@@ -121,20 +124,22 @@ def init_sprites(type):
         all_sprites.add(player)
 
 
-def check_enemy():
-    global CURRENT_TIME_SINCE_LAST_ENEMY
-    global enemies
-    for x, enemy in enumerate(enemies):
-        if enemy.rect.right < 0:
-            enemy.kill()
-    if CURRENT_TIME_SINCE_LAST_ENEMY > MIN_TIME_BETWEEN_ENEMIES:
-        if random.randint(0, ENEMY_PROPB-1) == 0:
-            s = Spike(SPIKE_IMAGE)
-            all_sprites.add(s)
-            enemies.add(s)
-            CURRENT_TIME_SINCE_LAST_ENEMY = 0
+def check_barrels(players):
+    global CURRENT_TIME_SINCE_LAST_BARREL
+    global barrels
+    for x, barrel in enumerate(barrels):
+        if barrel.rect.right < 0:
+            barrel.kill()
+            for player in players:
+                player.score += 1
+    if CURRENT_TIME_SINCE_LAST_BARREL > MIN_TIME_BETWEEN_BARRELS:
+        if random.randint(0, BARREL_PROB-1) == 0:
+            b = Barrel(BARREL_IMAGES)
+            all_sprites.add(b)
+            barrels.add(b)
+            CURRENT_TIME_SINCE_LAST_BARREL = 0
     else:
-        CURRENT_TIME_SINCE_LAST_ENEMY += 1
+        CURRENT_TIME_SINCE_LAST_BARREL += 1
 
 
 def ai_train_run(genomes, config):
@@ -157,16 +162,16 @@ def ai_train_run(genomes, config):
 
     while running and len(players) > 0:
         CLOCK.tick(FPS)
-        check_enemy()
+        check_barrels(players)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-        spike_index = 0
+        barrel_index = 0
         if len(players) > 0:
-            if len(enemies.sprites()) > 1 and players[0].rect.right > enemies.sprites()[0].rect.left:
-                spike_index = 1
+            if len(barrels.sprites()) > 1 and players[0].rect.right > barrels.sprites()[0].rect.left:
+                barrel_index = 1
 
         for x, player in enumerate(players):
             if player.score > 5000:
@@ -174,16 +179,16 @@ def ai_train_run(genomes, config):
                 running = False
 
             ge[x].fitness += 0.1
-            if (len(enemies.sprites()) > 0):
+            if (len(barrels.sprites()) > 0):
                 output = nets[x].activate(
-                    (player.rect.right, player.rect.top, enemies.sprites()[spike_index].rect.left, enemies.sprites()[spike_index].velocity))
+                    (player.rect.right, player.rect.top, barrels.sprites()[barrel_index].rect.left, barrels.sprites()[barrel_index].velocity))
 
                 if output[0] > 0:
                     player.jump()
 
         for x, player in enumerate(players):
             hits = pygame.sprite.spritecollide(
-                player, enemies, False, pygame.sprite.collide_mask)
+                player, barrels, False, pygame.sprite.collide_mask)
             for hit in hits:
                 # enemy_exp_sound.play()
                 expl = Explosion(hit.rect.center, EXPLOSIONS_IMAGES)
@@ -221,20 +226,20 @@ def ai_run(genome, config):
             if event.type == pygame.QUIT:
                 running = False
 
-        spike_index = 0
+        barrel_index = 0
 
-        if len(enemies.sprites()) > 1 and player.rect.right > enemies.sprites()[0].rect.left:
-            spike_index = 1
+        if len(barrels.sprites()) > 1 and player.rect.right > barrels.sprites()[0].rect.left:
+            barrel_index = 1
 
-        if (len(enemies.sprites()) > 0):
+        if (len(barrels.sprites()) > 0):
             output = net.activate(
-                (player.rect.right, player.rect.top, enemies.sprites()[spike_index].rect.left, enemies.sprites()[spike_index].velocity))
+                (player.rect.right, player.rect.top, barrels.sprites()[barrel_index].rect.left, barrels.sprites()[barrel_index].velocity))
 
             if output[0] > 0:
                 player.jump()
 
         hits = pygame.sprite.spritecollide(
-            player, enemies, False, pygame.sprite.collide_mask)
+            player, barrels, False, pygame.sprite.collide_mask)
 
         for hit in hits:
             # enemy_exp_sound.play()
@@ -242,7 +247,7 @@ def ai_run(genome, config):
             all_sprites.add(expl)
             game_over = True
 
-        check_enemy()
+        check_barrels([player])
         BACKGROUND.update()
         all_sprites.update()
         all_sprites.draw(BACKGROUND.screen)
@@ -274,7 +279,7 @@ def player_run():
                     player.jump()
 
         hits = pygame.sprite.spritecollide(
-            player, enemies, False, pygame.sprite.collide_mask)
+            player, barrels, False, pygame.sprite.collide_mask)
 
         for hit in hits:
             # enemy_exp_sound.play()
@@ -282,7 +287,7 @@ def player_run():
             all_sprites.add(expl)
             game_over = True
 
-        check_enemy()
+        check_barrels([player])
         BACKGROUND.update()
         all_sprites.update()
         all_sprites.draw(BACKGROUND.screen)
@@ -328,7 +333,7 @@ def start():
 
     draw_text(BACKGROUND.screen, "AI platformer", 64,
               BACKGROUND.size[0]/2, BACKGROUND.size[1]/4)
-    draw_text(BACKGROUND.screen, "Space to jump, avoid enemies",
+    draw_text(BACKGROUND.screen, "Space to jump, avoid barrels",
               22, BACKGROUND.size[0]/2, BACKGROUND.size[1]/2)
     draw_text(BACKGROUND.screen,
               "Press left arrow to play, up arrow to let the ai play or right arrow to train the ai", 18, BACKGROUND.size[0]/2, BACKGROUND.size[1]*3/4)
@@ -350,7 +355,7 @@ def start():
                 elif event.key == pygame.K_RIGHT:
                     mode = 'ai_train'
                     waiting = False
-    if mode == ' player':
+    if mode == 'player':
         player_run()
     else:
         local_dir = os.path.dirname(__file__)
@@ -363,9 +368,3 @@ def start():
 
 if __name__ == "__main__":
     start()
-
-
-# TODO
-# explosion animation larger
-# different sprite for enemy
-# score based on enemy passed rather than time

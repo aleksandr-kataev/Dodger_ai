@@ -35,9 +35,9 @@ class Player(pygame.sprite.Sprite):
         if self.run_count + 1 >= 18:
             self.run_count = 0
 
-        if pygame.time.get_ticks() - self.score_update > 100:
-            self.score_update = pygame.time.get_ticks()
-            self.score += 10
+        # if pygame.time.get_ticks() - self.score_update > 200:
+        #    self.score_update = pygame.time.get_ticks()
+        #   self.score += 10
 
         if self.rect.y >= Player.init_y:
             self.inair = False
