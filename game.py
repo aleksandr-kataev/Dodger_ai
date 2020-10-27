@@ -1,9 +1,11 @@
 import pygame
 import os
 import random
+import neat
 from Player import Player
 from Spike import Spike
 from Background import Background
+from Explosion import Explosion
 
 # CONSTANS
 
@@ -13,7 +15,7 @@ GREEN = (0, 255, 0)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
-FPS = 60
+FPS = 120
 
 os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (300, 80)
 
@@ -58,41 +60,26 @@ FONT_NAME = pygame.font.match_font('arial')
 
 CLOCK = pygame.time.Clock()
 
+BACKGROUND = Background(BACKGROUND_IMAGE)
 
 ENEMY_PROPB = 100
-ENEMIES = []
-MIN_TIME_BETWEEN_ENEMIES = 200
+MIN_TIME_BETWEEN_ENEMIES = 100
 CURRENT_TIME_SINCE_LAST_ENEMY = 0
 
 
-def show_start_screen(screen):
-    draw_text(screen, "AI", 64, WIDTH/2, HEIGHT/4)
-    draw_text(screen, "Space to jump, avoid enemies",
-              22, WIDTH/2, HEIGHT/2)
-    draw_text(screen, "Press any key to begin", 18, WIDTH/2, HEIGHT*3/4)
-    pygame.display.flip()
-    waiting = True
-    while waiting:
-        CLOCK.tick(FPS)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-            elif event.type == pygame.KEYUP:
-                waiting = False
-
-
-def show_game_over_screen(screen):
-    screen.blit(background, background_rect)
-    draw_text(screen, "Game Over", 64, WIDTH/2, HEIGHT/4)
+def show_game_over_screen():
+    draw_text(BACKGROUND.screen, "Game Over", 64,
+              BACKGROUND.size[0]/2, BACKGROUND.size[1]/4)
     score_string = "Your score is " + str(player.score)
-    draw_text(screen, score_string,
-              40, WIDTH/2, HEIGHT/2)
-    draw_text(screen, "Press any key to try again", 22, WIDTH/2, HEIGHT*3/4)
+    draw_text(BACKGROUND.screen, score_string,
+              40, BACKGROUND.size[0]/2, BACKGROUND.size[1]/2)
+    draw_text(BACKGROUND.screen, "Press any key to try again",
+              22, BACKGROUND.size[0]/2, BACKGROUND.size[1]*3/4)
     pygame.display.flip()
     pygame.time.delay(2000)
     waiting = True
     while waiting:
-        clock.tick(FPS)
+        CLOCK.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -127,60 +114,94 @@ def init_sprites(type):
     enemies = pygame.sprite.Group()
     all_sprites.add(enemies)
 
-    if (type != 'controlled'):
+    if (type != 'ai'):
         global player
         player = Player(PLAYER_RUNNING_IMAGES)
         all_sprites.add(player)
 
 
-def controlled_run():
-    players = []
-
-    # Ground different sprites together
-    global all_sprites
-    all_sprites = pygame.sprite.Group()
+def check_enemy():
+    global CURRENT_TIME_SINCE_LAST_ENEMY
     global enemies
-    enemies = pygame.sprite.Group()
+    for x, enemy in enumerate(enemies):
+        if enemy.rect.right < 0:
+            enemy.kill()
+    if CURRENT_TIME_SINCE_LAST_ENEMY > MIN_TIME_BETWEEN_ENEMIES:
+        if random.randint(0, ENEMY_PROPB-1) == 0:
+            s = Spike(SPIKE_IMAGE)
+            all_sprites.add(s)
+            enemies.add(s)
+            CURRENT_TIME_SINCE_LAST_ENEMY = 0
+    else:
+        CURRENT_TIME_SINCE_LAST_ENEMY += 1
 
+
+def ai_run(genomes, config):
+    gen = 0
+    nets = []
+    players = []
+    ge = []
+    init_sprites('ai')
+    for genome_id, genome in genomes:
+        genome.fitness = 0  # start with fitness level of 0
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(net)
+        player = Player(PLAYER_RUNNING_IMAGES)
+        global all_sprites
+        all_sprites.add(player)
+        players.append(player)
+        ge.append(genome)
+
+    game_over = False
     running = True
 
-    while running:
+    while running and len(players) > 0:
         CLOCK.tick(FPS)
+        check_enemy()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-        all_sprites.update()
+        spike_index = 0
+        if len(players) > 0:
+            if len(enemies.sprites()) > 1 and players[0].rect.right > enemies.sprites()[0].rect.left:
+                spike_index = 1
 
         for x, player in enumerate(players):
-            hits = pygame.sprite.spritecollide(player, enemies, True)
+            ge[x].fitness += 0.1
+            if (len(enemies.sprites()) > 0):
+                output = nets[x].activate(
+                    (player.rect.top, enemies.sprites()[spike_index].rect.left, enemies.sprites()[spike_index].velocity))
+
+                if output[0] > 0:
+                    player.jump()
+
+        for x, player in enumerate(players):
+            hits = pygame.sprite.spritecollide(
+                player, enemies, False, pygame.sprite.collide_mask)
             for hit in hits:
                 # enemy_exp_sound.play()
-                # TODO explosion class
-                expl = Explosion(hit.rect.center)
+                expl = Explosion(hit.rect.center, EXPLOSIONS_IMAGES)
                 all_sprites.add(expl)
-                game_over = True
+                ge[x].fitness -= 1
+                players.pop(x)
+                nets.pop(x)
+                ge.pop(x)
+                player.kill()
 
-        window.fill(BLACK)
-        window.blit(BACKGROUND_IMAGE, BACKGROUND_RECT)
-        all_sprites.draw(window)
+        BACKGROUND.update()
+        all_sprites.update()
+        all_sprites.draw(BACKGROUND.screen)
+        draw_text(BACKGROUND.screen, str(player.score),
+                  22, BACKGROUND.size[0] / 2, 10)
         pygame.display.flip()
-
-    pygame.quit()
-    quit()
+        CLOCK.tick(FPS)
 
 
-def run():
-    # show_start_screen()
+def player_run():
 
     init_sprites('run')
-
-    background = Background(BACKGROUND_IMAGE)
-
-    s = Spike(SPIKE_IMAGE)
-    all_sprites.add(s)
-    enemies.add(s)
 
     game_over = False
     running = True
@@ -189,7 +210,7 @@ def run():
         if game_over:
             show_game_over_screen()
             game_over = False
-            initialise_game()
+            init_sprites('run')
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -197,22 +218,22 @@ def run():
             elif event.type == pygame.KEYDOWN:
                 if event.key == 32:
                     player.jump()
-                elif event.key == 119:
-                    clock_tick += 25
-                elif event.key == 115:
-                    clock_tick -= 25
 
-        hits = pygame.sprite.spritecollide(player, enemies, True)
+        hits = pygame.sprite.spritecollide(
+            player, enemies, False, pygame.sprite.collide_mask)
 
-        # for hit in hits:
-            #enemy_exp_sound.play()
-            expl = Explosion(hit.rect.center)
+        for hit in hits:
+            # enemy_exp_sound.play()
+            expl = Explosion(hit.rect.center, EXPLOSIONS_IMAGES)
             all_sprites.add(expl)
             game_over = True
 
-        background.update()
+        check_enemy()
+        BACKGROUND.update()
         all_sprites.update()
-        all_sprites.draw(background.screen)
+        all_sprites.draw(BACKGROUND.screen)
+        draw_text(BACKGROUND.screen, str(player.score),
+                  22, BACKGROUND.size[0] / 2, 10)
         pygame.display.flip()
         CLOCK.tick(FPS)
 
@@ -220,4 +241,57 @@ def run():
     quit()
 
 
-run()
+def run(config_path):
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                config_path)
+
+    p = neat.Population(config)
+
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    winner = p.run(ai_run, 50)
+
+
+def start():
+
+    draw_text(BACKGROUND.screen, "AI platformer", 64,
+              BACKGROUND.size[0]/2, BACKGROUND.size[1]/4)
+    draw_text(BACKGROUND.screen, "Space to jump, avoid enemies",
+              22, BACKGROUND.size[0]/2, BACKGROUND.size[1]/2)
+    draw_text(BACKGROUND.screen,
+              "Press right arrow to play or left arrow to ley the ai play", 18, BACKGROUND.size[0]/2, BACKGROUND.size[1]*3/4)
+    pygame.display.flip()
+    waiting = True
+    mode = 'null'
+    while waiting:
+        CLOCK.tick(FPS)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RIGHT:
+                    mode = 'p'
+                    waiting = False
+                elif event.key == pygame.K_LEFT:
+                    mode = 'a'
+                    waiting = False
+
+    if mode == 'a':
+        local_dir = os.path.dirname(__file__)
+        config_path = os.path.join(local_dir, 'config.txt')
+        run(config_path)
+    elif mode == 'p':
+        player_run()
+
+
+if __name__ == "__main__":
+    start()
+
+
+# TODO
+# explosion animation larger
+# different sprite for enemy
+# score based on enemy passed rather than time

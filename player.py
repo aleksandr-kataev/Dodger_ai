@@ -8,9 +8,9 @@ class Player(pygame.sprite.Sprite):
     init_x = 100
     init_y = 678
 
-    jump_height = 150
-    jump_speed = 8
-    jump_speed_accel = 2
+    jump_height = 160
+    jump_speed = 7
+    jump_speed_accel = 4
 
     def __init__(self, images):
         pygame.sprite.Sprite.__init__(self)
@@ -18,7 +18,7 @@ class Player(pygame.sprite.Sprite):
         self.init_image = images[0]
         self.image = self.init_image
         self.image.set_colorkey(Player.RED)
-        #self.mask = pygame.mask.from_surface(self.image)
+        self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect()
         self.rect.x = Player.init_x
         self.rect.y = Player.init_y
@@ -29,8 +29,6 @@ class Player(pygame.sprite.Sprite):
         self.inair = False
         self.current_jump_speed = 0
         self.run_count = 0
-        # TODO jumping animation
-        self.jump_count = 0
 
     def update(self):
 
@@ -61,17 +59,10 @@ class Player(pygame.sprite.Sprite):
             self.image.set_colorkey(Player.RED)
             self.run_count += 1
 
+        self.mask = pygame.mask.from_surface(self.image)
+
     def jump(self):
         self.current_jump_speed = Player.jump_speed
         self.inair = True
         if self.rect.y >= Player.init_y:
             self.jumping = True
-
-# https://www.youtube.com/watch?v=xxRhvyZXd8
-# https://medium.com/@sanilkhurana7/building-a-neural-network-that-learns-to-play-a-game-part-1-e408ae7106d0
-
-# to spawn enemies
-# spawn every x to y seconds
-# where x is the jump time
-# spwan at least x sec in between to allow the player to jump
-#
