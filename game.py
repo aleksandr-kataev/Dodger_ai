@@ -2,6 +2,7 @@ import pygame
 import os
 import random
 import neat
+import pickle
 from Player import Player
 from Spike import Spike
 from Background import Background
@@ -63,7 +64,7 @@ CLOCK = pygame.time.Clock()
 BACKGROUND = Background(BACKGROUND_IMAGE)
 
 ENEMY_PROPB = 100
-MIN_TIME_BETWEEN_ENEMIES = 100
+MIN_TIME_BETWEEN_ENEMIES = 80
 CURRENT_TIME_SINCE_LAST_ENEMY = 0
 
 
@@ -114,7 +115,7 @@ def init_sprites(type):
     enemies = pygame.sprite.Group()
     all_sprites.add(enemies)
 
-    if (type != 'ai'):
+    if (type != 'ai_train'):
         global player
         player = Player(PLAYER_RUNNING_IMAGES)
         all_sprites.add(player)
@@ -136,12 +137,11 @@ def check_enemy():
         CURRENT_TIME_SINCE_LAST_ENEMY += 1
 
 
-def ai_run(genomes, config):
-    gen = 0
+def ai_train_run(genomes, config):
     nets = []
     players = []
     ge = []
-    init_sprites('ai')
+    init_sprites('ai_train')
     for genome_id, genome in genomes:
         genome.fitness = 0  # start with fitness level of 0
         net = neat.nn.FeedForwardNetwork.create(genome, config)
@@ -169,10 +169,14 @@ def ai_run(genomes, config):
                 spike_index = 1
 
         for x, player in enumerate(players):
+            if player.score > 5000:
+                game_over = True
+                running = False
+
             ge[x].fitness += 0.1
             if (len(enemies.sprites()) > 0):
                 output = nets[x].activate(
-                    (player.rect.top, enemies.sprites()[spike_index].rect.left, enemies.sprites()[spike_index].velocity))
+                    (player.rect.right, player.rect.top, enemies.sprites()[spike_index].rect.left, enemies.sprites()[spike_index].velocity))
 
                 if output[0] > 0:
                     player.jump()
@@ -199,9 +203,10 @@ def ai_run(genomes, config):
         CLOCK.tick(FPS)
 
 
-def player_run():
-
-    init_sprites('run')
+def ai_run(genome, config):
+    init_sprites('ai_run')
+    global player
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     game_over = False
     running = True
@@ -210,7 +215,56 @@ def player_run():
         if game_over:
             show_game_over_screen()
             game_over = False
-            init_sprites('run')
+            init_sprites('ai_run')
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        spike_index = 0
+
+        if len(enemies.sprites()) > 1 and player.rect.right > enemies.sprites()[0].rect.left:
+            spike_index = 1
+
+        if (len(enemies.sprites()) > 0):
+            output = net.activate(
+                (player.rect.right, player.rect.top, enemies.sprites()[spike_index].rect.left, enemies.sprites()[spike_index].velocity))
+
+            if output[0] > 0:
+                player.jump()
+
+        hits = pygame.sprite.spritecollide(
+            player, enemies, False, pygame.sprite.collide_mask)
+
+        for hit in hits:
+            # enemy_exp_sound.play()
+            expl = Explosion(hit.rect.center, EXPLOSIONS_IMAGES)
+            all_sprites.add(expl)
+            game_over = True
+
+        check_enemy()
+        BACKGROUND.update()
+        all_sprites.update()
+        all_sprites.draw(BACKGROUND.screen)
+        draw_text(BACKGROUND.screen, str(player.score),
+                  22, BACKGROUND.size[0] / 2, 10)
+        pygame.display.flip()
+        CLOCK.tick(FPS)
+
+    pygame.quit()
+    quit()
+
+
+def player_run():
+    init_sprites('player_run')
+    game_over = False
+    running = True
+
+    while running:
+        if game_over:
+            show_game_over_screen()
+            game_over = False
+            init_sprites('player_run')
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -252,7 +306,22 @@ def run(config_path):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
-    winner = p.run(ai_run, 50)
+    best = p.run(ai_train_run, 5)
+
+    pickle.dump(best, open("test_train.pkl", "wb"))
+
+
+def replay_genome(config_path, genome_path="best.pkl"):
+    # Load requried NEAT config
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+
+    # Unpickle saved winner
+    with open(genome_path, "rb") as f:
+        genome = pickle.load(f)
+
+    # Call game with only the loaded genome
+    ai_run(genome, config)
 
 
 def start():
@@ -262,7 +331,7 @@ def start():
     draw_text(BACKGROUND.screen, "Space to jump, avoid enemies",
               22, BACKGROUND.size[0]/2, BACKGROUND.size[1]/2)
     draw_text(BACKGROUND.screen,
-              "Press right arrow to play or left arrow to ley the ai play", 18, BACKGROUND.size[0]/2, BACKGROUND.size[1]*3/4)
+              "Press left arrow to play, up arrow to let the ai play or right arrow to train the ai", 18, BACKGROUND.size[0]/2, BACKGROUND.size[1]*3/4)
     pygame.display.flip()
     waiting = True
     mode = 'null'
@@ -272,19 +341,24 @@ def start():
             if event.type == pygame.QUIT:
                 pygame.quit()
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RIGHT:
-                    mode = 'p'
+                if event.key == pygame.K_LEFT:
+                    mode = 'player'
                     waiting = False
-                elif event.key == pygame.K_LEFT:
-                    mode = 'a'
+                elif event.key == pygame.K_UP:
+                    mode = 'ai_run'
                     waiting = False
-
-    if mode == 'a':
+                elif event.key == pygame.K_RIGHT:
+                    mode = 'ai_train'
+                    waiting = False
+    if mode == ' player':
+        player_run()
+    else:
         local_dir = os.path.dirname(__file__)
         config_path = os.path.join(local_dir, 'config.txt')
-        run(config_path)
-    elif mode == 'p':
-        player_run()
+        if mode == 'ai_train':
+            run(config_path)
+        elif mode == 'ai_run':
+            replay_genome(config_path)
 
 
 if __name__ == "__main__":
